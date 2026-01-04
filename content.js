@@ -1,0 +1,362 @@
+// note.com 下書き一括公開 - Content Script
+// マウス操作を自動化して下書きを順番に公開
+
+(function() {
+  'use strict';
+
+  const STORAGE_KEY = 'note_bulk_publish_state';
+
+  // 状態管理
+  function getState() {
+    const state = sessionStorage.getItem(STORAGE_KEY);
+    return state ? JSON.parse(state) : { active: false, count: 0 };
+  }
+
+  function setState(state) {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  function clearState() {
+    sessionStorage.removeItem(STORAGE_KEY);
+  }
+
+  // 要素を待機して取得
+  function waitForElement(selector, timeout = 10000) {
+    return new Promise((resolve, reject) => {
+      const element = document.querySelector(selector);
+      if (element) {
+        resolve(element);
+        return;
+      }
+
+      const observer = new MutationObserver((mutations, obs) => {
+        const el = document.querySelector(selector);
+        if (el) {
+          obs.disconnect();
+          resolve(el);
+        }
+      });
+
+      observer.observe(document.body, { childList: true, subtree: true });
+
+      setTimeout(() => {
+        observer.disconnect();
+        reject(new Error(`要素が見つかりません: ${selector}`));
+      }, timeout);
+    });
+  }
+
+  // 少し待機
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // クリックをシミュレート
+  function simulateClick(element) {
+    element.click();
+  }
+
+  // 現在のページを判定
+  function getCurrentPage() {
+    const url = window.location.href;
+    if (url.includes('/notes') && url.includes('status=draft')) {
+      return 'draft_list';
+    } else if (url.includes('/n/') && url.includes('/edit')) {
+      return 'edit_page';
+    } else if (url.includes('/n/')) {
+      return 'article_page';
+    }
+    return 'unknown';
+  }
+
+  // Step 2: 下書き一覧で最初のエントリの...ボタンをクリック
+  async function clickFirstDraftMenu() {
+    console.log('[一括公開] 下書き一覧ページ - メニューボタンを探しています...');
+
+    await sleep(2000); // ページ読み込み待ち
+
+    // ...ボタン（メニューボタン）を探す
+    // note.comのUIでは通常、各記事の右端に3点リーダーのボタンがある
+    const menuButtons = document.querySelectorAll('button[aria-label*="メニュー"], button[aria-label*="menu"], [class*="menu"] button, [class*="more"] button, button svg');
+
+    // 記事リスト内のメニューボタンを探す
+    let menuButton = null;
+
+    // 記事コンテナを探す
+    const articles = document.querySelectorAll('[class*="article"], [class*="note"], [class*="item"], [class*="card"]');
+
+    for (const article of articles) {
+      const btn = article.querySelector('button:has(svg), [role="button"]:has(svg)');
+      if (btn) {
+        menuButton = btn;
+        break;
+      }
+    }
+
+    // 見つからない場合は最初のボタンを試す
+    if (!menuButton) {
+      // より汎用的なセレクタで探す
+      const allButtons = document.querySelectorAll('button');
+      for (const btn of allButtons) {
+        // 3点リーダーのアイコンを含むボタンを探す
+        if (btn.innerHTML.includes('svg') || btn.querySelector('svg')) {
+          const rect = btn.getBoundingClientRect();
+          // 画面右側にあるボタン
+          if (rect.right > window.innerWidth * 0.7) {
+            menuButton = btn;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!menuButton) {
+      throw new Error('メニューボタンが見つかりません。下書きがないか、UIが変更された可能性があります。');
+    }
+
+    console.log('[一括公開] メニューボタンをクリック');
+    simulateClick(menuButton);
+
+    // Step 3: ポップアップから「編集」をクリック
+    await sleep(1000);
+    await clickEditButton();
+  }
+
+  // Step 3: 編集ボタンをクリック
+  async function clickEditButton() {
+    console.log('[一括公開] 編集ボタンを探しています...');
+
+    // ポップアップメニューから「編集」を探す
+    const menuItems = document.querySelectorAll('[role="menuitem"], [role="button"], button, a');
+
+    for (const item of menuItems) {
+      const text = item.textContent.trim();
+      if (text === '編集' || text === '編集する') {
+        console.log('[一括公開] 編集ボタンをクリック');
+        simulateClick(item);
+        return;
+      }
+    }
+
+    throw new Error('編集ボタンが見つかりません');
+  }
+
+  // Step 4: 編集画面で「公開に進む」ボタンをクリック
+  async function clickPublishButton() {
+    console.log('[一括公開] 編集ページ - 公開に進むボタンを探しています...');
+
+    await sleep(2000); // ページ読み込み待ち
+
+    // 「公開に進む」ボタンを探す
+    const buttons = document.querySelectorAll('button');
+
+    for (const btn of buttons) {
+      const text = btn.textContent.trim();
+      if (text.includes('公開に進む') || text.includes('公開する')) {
+        console.log('[一括公開] 公開に進むボタンをクリック');
+        simulateClick(btn);
+        await sleep(1500);
+        await clickPostButton();
+        return;
+      }
+    }
+
+    throw new Error('公開に進むボタンが見つかりません');
+  }
+
+  // Step 5: 確認画面で「投稿する」ボタンをクリック
+  async function clickPostButton() {
+    console.log('[一括公開] 投稿するボタンを探しています...');
+
+    await sleep(1000);
+
+    const buttons = document.querySelectorAll('button');
+
+    for (const btn of buttons) {
+      const text = btn.textContent.trim();
+      if (text === '投稿する' || text === '投稿') {
+        console.log('[一括公開] 投稿するボタンをクリック');
+        simulateClick(btn);
+        await sleep(2000);
+        await closeShareDialog();
+        return;
+      }
+    }
+
+    throw new Error('投稿するボタンが見つかりません');
+  }
+
+  // Step 6: シェアダイアログを閉じる
+  async function closeShareDialog() {
+    console.log('[一括公開] シェアダイアログを閉じます...');
+
+    await sleep(2000);
+
+    // ×ボタンを探す
+    const closeButtons = document.querySelectorAll('button[aria-label*="閉じる"], button[aria-label*="close"], [class*="close"] button, button:has(svg)');
+
+    for (const btn of closeButtons) {
+      const rect = btn.getBoundingClientRect();
+      // 右上にあるボタンを探す（モーダルの閉じるボタン）
+      if (rect.top < 200 && rect.right > window.innerWidth * 0.6) {
+        console.log('[一括公開] 閉じるボタンをクリック');
+        simulateClick(btn);
+        await sleep(1000);
+        break;
+      }
+    }
+
+    // 状態を更新して次の記事へ
+    const state = getState();
+    state.count++;
+    setState(state);
+
+    console.log(`[一括公開] ${state.count}件目の公開完了！次の記事へ移動します...`);
+
+    // Step 7: 下書き一覧に戻る
+    await sleep(1000);
+    window.location.href = 'https://note.com/notes?status=draft';
+  }
+
+  // メイン処理
+  async function processCurrentPage() {
+    const state = getState();
+
+    if (!state.active) {
+      return; // 自動処理が有効でない場合は何もしない
+    }
+
+    const page = getCurrentPage();
+    console.log(`[一括公開] 現在のページ: ${page}, 公開済み: ${state.count}件`);
+
+    try {
+      switch (page) {
+        case 'draft_list':
+          await clickFirstDraftMenu();
+          break;
+        case 'edit_page':
+          await clickPublishButton();
+          break;
+        default:
+          console.log('[一括公開] 未知のページです');
+      }
+    } catch (error) {
+      console.error('[一括公開] エラー:', error.message);
+      alert(`一括公開エラー: ${error.message}\n\n公開済み: ${state.count}件`);
+      clearState();
+    }
+  }
+
+  // 開始ボタンを追加
+  function addStartButton() {
+    if (document.getElementById('note-bulk-publish-btn')) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'note-bulk-publish-btn';
+    btn.innerHTML = '一括公開開始';
+    btn.style.cssText = `
+      position: fixed;
+      top: 80px;
+      right: 20px;
+      z-index: 10000;
+      background: #41c9b4;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 25px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+      box-shadow: 0 4px 12px rgba(65, 201, 180, 0.4);
+    `;
+
+    btn.addEventListener('click', async () => {
+      const count = prompt('何件公開しますか？（0 = 全件）', '0');
+      if (count === null) return;
+
+      const maxCount = parseInt(count, 10) || 0;
+
+      if (!confirm(`下書きを${maxCount === 0 ? '全件' : maxCount + '件'}公開します。\n\n処理中はブラウザを操作しないでください。\n\nよろしいですか？`)) {
+        return;
+      }
+
+      setState({ active: true, count: 0, maxCount: maxCount });
+      btn.innerHTML = '処理中...';
+      btn.disabled = true;
+
+      await processCurrentPage();
+    });
+
+    // 停止ボタン
+    const stopBtn = document.createElement('button');
+    stopBtn.id = 'note-bulk-stop-btn';
+    stopBtn.innerHTML = '停止';
+    stopBtn.style.cssText = `
+      position: fixed;
+      top: 80px;
+      right: 150px;
+      z-index: 10000;
+      background: #e74c3c;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 25px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+      box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
+    `;
+
+    stopBtn.addEventListener('click', () => {
+      const state = getState();
+      clearState();
+      alert(`一括公開を停止しました。\n\n公開済み: ${state.count}件`);
+      window.location.reload();
+    });
+
+    document.body.appendChild(btn);
+    document.body.appendChild(stopBtn);
+  }
+
+  // 初期化
+  function init() {
+    const page = getCurrentPage();
+
+    if (page === 'draft_list') {
+      addStartButton();
+    }
+
+    // 自動処理が有効な場合は処理を続行
+    const state = getState();
+    if (state.active) {
+      // 最大件数に達したかチェック
+      if (state.maxCount > 0 && state.count >= state.maxCount) {
+        alert(`一括公開完了！\n\n${state.count}件の記事を公開しました。`);
+        clearState();
+        return;
+      }
+
+      // 下書きがなくなったかチェック（下書き一覧ページの場合）
+      if (page === 'draft_list') {
+        setTimeout(async () => {
+          const articles = document.querySelectorAll('[class*="article"], [class*="note"], [class*="item"], [class*="card"]');
+          if (articles.length === 0) {
+            alert(`一括公開完了！\n\n${state.count}件の記事を公開しました。\n（全ての下書きを公開しました）`);
+            clearState();
+            return;
+          }
+          await processCurrentPage();
+        }, 2000);
+      } else {
+        setTimeout(() => processCurrentPage(), 2000);
+      }
+    }
+  }
+
+  // ページ読み込み完了後に実行
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
