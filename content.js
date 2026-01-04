@@ -109,14 +109,15 @@
   async function clickEditButton() {
     console.log('[一括公開] 編集ボタンを探しています...');
 
-    // ポップアップメニューから「編集」を探す
-    const menuItems = document.querySelectorAll('[role="menuitem"], [role="button"], button, a');
+    // ポップアップメニューから「編集」ボタンを探す
+    // class: m-basicBalloonList__button
+    const buttons = document.querySelectorAll('button.m-basicBalloonList__button, .m-basicBalloonList__item button');
 
-    for (const item of menuItems) {
-      const text = item.textContent.trim();
-      if (text === '編集' || text === '編集する') {
+    for (const btn of buttons) {
+      const text = btn.textContent.trim();
+      if (text === '編集') {
         console.log('[一括公開] 編集ボタンをクリック');
-        simulateClick(item);
+        simulateClick(btn);
         return;
       }
     }
