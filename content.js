@@ -77,31 +77,19 @@
 
     let menuButton = null;
 
-    // XPathで取得を試みる（最も確実）
-    // //*[@id="__layout"]/div/div[1]/main/div/div[3]/div[2]/div/div/div/div[1]/ul/li[1]/div/div[3]/button
-    const xpath = '//*[@id="__layout"]//ul/li[1]//button';
-    const xpathResult = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-    if (xpathResult.singleNodeValue) {
-      menuButton = xpathResult.singleNodeValue;
-      console.log('[一括公開] XPathでメニューボタンを発見');
-    }
+    // note.comの下書き一覧の「...」ボタンを取得
+    // クラス名: o-articleList__more, aria-label: その他
+    const selectors = [
+      'button.o-articleList__more',
+      'button[aria-label="その他"]',
+      '.o-articleList__others button'
+    ];
 
-    // XPathで見つからない場合はCSSセレクタで試す
-    if (!menuButton) {
-      // note.comの下書き一覧のリスト構造に基づくセレクタ
-      const selectors = [
-        '#__layout main ul li:first-child button',
-        '#__layout ul li:first-child div div:last-child button',
-        'ul li:first-child button[type="button"]',
-        'ul > li:first-child button'
-      ];
-
-      for (const selector of selectors) {
-        menuButton = document.querySelector(selector);
-        if (menuButton) {
-          console.log(`[一括公開] セレクタ "${selector}" でメニューボタンを発見`);
-          break;
-        }
+    for (const selector of selectors) {
+      menuButton = document.querySelector(selector);
+      if (menuButton) {
+        console.log(`[一括公開] セレクタ "${selector}" でメニューボタンを発見`);
+        break;
       }
     }
 
