@@ -75,37 +75,32 @@
 
     await sleep(2000); // ページ読み込み待ち
 
-    // ...ボタン（メニューボタン）を探す
-    // note.comのUIでは通常、各記事の右端に3点リーダーのボタンがある
-    const menuButtons = document.querySelectorAll('button[aria-label*="メニュー"], button[aria-label*="menu"], [class*="menu"] button, [class*="more"] button, button svg');
-
-    // 記事リスト内のメニューボタンを探す
     let menuButton = null;
 
-    // 記事コンテナを探す
-    const articles = document.querySelectorAll('[class*="article"], [class*="note"], [class*="item"], [class*="card"]');
-
-    for (const article of articles) {
-      const btn = article.querySelector('button:has(svg), [role="button"]:has(svg)');
-      if (btn) {
-        menuButton = btn;
-        break;
-      }
+    // XPathで取得を試みる（最も確実）
+    // //*[@id="__layout"]/div/div[1]/main/div/div[3]/div[2]/div/div/div/div[1]/ul/li[1]/div/div[3]/button
+    const xpath = '//*[@id="__layout"]//ul/li[1]//button';
+    const xpathResult = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+    if (xpathResult.singleNodeValue) {
+      menuButton = xpathResult.singleNodeValue;
+      console.log('[一括公開] XPathでメニューボタンを発見');
     }
 
-    // 見つからない場合は最初のボタンを試す
+    // XPathで見つからない場合はCSSセレクタで試す
     if (!menuButton) {
-      // より汎用的なセレクタで探す
-      const allButtons = document.querySelectorAll('button');
-      for (const btn of allButtons) {
-        // 3点リーダーのアイコンを含むボタンを探す
-        if (btn.innerHTML.includes('svg') || btn.querySelector('svg')) {
-          const rect = btn.getBoundingClientRect();
-          // 画面右側にあるボタン
-          if (rect.right > window.innerWidth * 0.7) {
-            menuButton = btn;
-            break;
-          }
+      // note.comの下書き一覧のリスト構造に基づくセレクタ
+      const selectors = [
+        '#__layout main ul li:first-child button',
+        '#__layout ul li:first-child div div:last-child button',
+        'ul li:first-child button[type="button"]',
+        'ul > li:first-child button'
+      ];
+
+      for (const selector of selectors) {
+        menuButton = document.querySelector(selector);
+        if (menuButton) {
+          console.log(`[一括公開] セレクタ "${selector}" でメニューボタンを発見`);
+          break;
         }
       }
     }
