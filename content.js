@@ -59,8 +59,12 @@
   // 現在のページを判定
   function getCurrentPage() {
     const url = window.location.href;
+    const host = window.location.hostname;
+
     if (url.includes('/notes') && url.includes('status=draft')) {
       return 'draft_list';
+    } else if (host === 'editor.note.com' && url.includes('/edit')) {
+      return 'edit_page';
     } else if (url.includes('/n/') && url.includes('/edit')) {
       return 'edit_page';
     } else if (url.includes('/n/')) {
@@ -129,17 +133,17 @@
   async function clickPublishButton() {
     console.log('[一括公開] 編集ページ - 公開に進むボタンを探しています...');
 
-    await sleep(2000); // ページ読み込み待ち
+    await sleep(3000); // ページ読み込み待ち（エディタは重いので長めに）
 
     // 「公開に進む」ボタンを探す
     const buttons = document.querySelectorAll('button');
 
     for (const btn of buttons) {
       const text = btn.textContent.trim();
-      if (text.includes('公開に進む') || text.includes('公開する')) {
+      if (text === '公開に進む') {
         console.log('[一括公開] 公開に進むボタンをクリック');
         simulateClick(btn);
-        await sleep(1500);
+        await sleep(2000);
         await clickPostButton();
         return;
       }

@@ -8,7 +8,8 @@
     "scripting"
   ],
   "host_permissions": [
-    "https://note.com/*"
+    "https://note.com/*",
+    "https://editor.note.com/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -20,7 +21,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://note.com/*"],
+      "matches": ["https://note.com/*", "https://editor.note.com/*"],
       "js": ["content.js"],
       "css": ["styles.css"]
     }
