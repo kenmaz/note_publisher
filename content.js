@@ -201,25 +201,9 @@
       }
     }
 
-    // 状態を更新して次の記事へ
-    const state = await getState();
-    state.count++;
-    await setState(state);
-
-    console.log(`[一括公開] ${state.count}件目の公開完了！`);
-
-    // 最大件数に達したかチェック
-    if (state.maxCount > 0 && state.count >= state.maxCount) {
-      alert(`一括公開完了！\n\n${state.count}件の記事を公開しました。`);
-      await clearState();
-      return;
-    }
-
-    console.log(`[一括公開] 次の記事へ移動します...`);
-
-    // Step 7: 下書き一覧に戻る
-    await sleep(1000);
-    window.location.href = 'https://note.com/notes?status=draft';
+    // 閉じるボタンクリック後、ページ遷移が発生する
+    // カウント更新は article_page で行う（ここでは遷移前に中断されるため）
+    console.log(`[一括公開] シェアダイアログを閉じました - ページ遷移を待機中...`);
   }
 
   // メイン処理
@@ -243,7 +227,10 @@
           break;
         case 'article_page':
           // 公開後の記事ページにリダイレクトされた場合
-          console.log('[一括公開] 公開後の記事ページ');
+          // ここでカウントを増やす（closeShareDialogでは遷移前に中断されるため）
+          state.count++;
+          await setState(state);
+          console.log(`[一括公開] 公開後の記事ページ - ${state.count}件目の公開完了！`);
 
           // 最大件数に達したかチェック
           if (state.maxCount > 0 && state.count >= state.maxCount) {
