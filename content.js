@@ -232,6 +232,12 @@
         case 'edit_page':
           await clickPublishButton();
           break;
+        case 'article_page':
+          // 公開後の記事ページにリダイレクトされた場合、下書き一覧に戻る
+          console.log('[一括公開] 公開後の記事ページ - 下書き一覧に戻ります');
+          await sleep(1000);
+          window.location.href = 'https://note.com/notes?status=draft';
+          break;
         default:
           console.log('[一括公開] 未知のページです');
       }
