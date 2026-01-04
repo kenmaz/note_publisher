@@ -6,18 +6,25 @@
 
   const STORAGE_KEY = 'note_bulk_publish_state';
 
-  // 状態管理
-  function getState() {
-    const state = sessionStorage.getItem(STORAGE_KEY);
-    return state ? JSON.parse(state) : { active: false, count: 0 };
+  // 状態管理（chrome.storage.localを使用してドメイン間で共有）
+  async function getState() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get([STORAGE_KEY], (result) => {
+        resolve(result[STORAGE_KEY] || { active: false, count: 0 });
+      });
+    });
   }
 
-  function setState(state) {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  async function setState(state) {
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ [STORAGE_KEY]: state }, resolve);
+    });
   }
 
-  function clearState() {
-    sessionStorage.removeItem(STORAGE_KEY);
+  async function clearState() {
+    return new Promise((resolve) => {
+      chrome.storage.local.remove(STORAGE_KEY, resolve);
+    });
   }
 
   // 要素を待機して取得
@@ -195,9 +202,9 @@
     }
 
     // 状態を更新して次の記事へ
-    const state = getState();
+    const state = await getState();
     state.count++;
-    setState(state);
+    await setState(state);
 
     console.log(`[一括公開] ${state.count}件目の公開完了！次の記事へ移動します...`);
 
@@ -208,7 +215,7 @@
 
   // メイン処理
   async function processCurrentPage() {
-    const state = getState();
+    const state = await getState();
 
     if (!state.active) {
       return; // 自動処理が有効でない場合は何もしない
@@ -231,7 +238,7 @@
     } catch (error) {
       console.error('[一括公開] エラー:', error.message);
       alert(`一括公開エラー: ${error.message}\n\n公開済み: ${state.count}件`);
-      clearState();
+      await clearState();
     }
   }
 
@@ -268,7 +275,7 @@
         return;
       }
 
-      setState({ active: true, count: 0, maxCount: maxCount });
+      await setState({ active: true, count: 0, maxCount: maxCount });
       btn.innerHTML = '処理中...';
       btn.disabled = true;
 
@@ -295,9 +302,9 @@
       box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
     `;
 
-    stopBtn.addEventListener('click', () => {
-      const state = getState();
-      clearState();
+    stopBtn.addEventListener('click', async () => {
+      const state = await getState();
+      await clearState();
       alert(`一括公開を停止しました。\n\n公開済み: ${state.count}件`);
       window.location.reload();
     });
@@ -307,20 +314,23 @@
   }
 
   // 初期化
-  function init() {
+  async function init() {
     const page = getCurrentPage();
+    console.log(`[一括公開] init: ページ = ${page}`);
 
     if (page === 'draft_list') {
       addStartButton();
     }
 
     // 自動処理が有効な場合は処理を続行
-    const state = getState();
+    const state = await getState();
+    console.log(`[一括公開] init: 状態 =`, state);
+
     if (state.active) {
       // 最大件数に達したかチェック
       if (state.maxCount > 0 && state.count >= state.maxCount) {
         alert(`一括公開完了！\n\n${state.count}件の記事を公開しました。`);
-        clearState();
+        await clearState();
         return;
       }
 
@@ -330,7 +340,7 @@
           const articles = document.querySelectorAll('[class*="article"], [class*="note"], [class*="item"], [class*="card"]');
           if (articles.length === 0) {
             alert(`一括公開完了！\n\n${state.count}件の記事を公開しました。\n（全ての下書きを公開しました）`);
-            clearState();
+            await clearState();
             return;
           }
           await processCurrentPage();

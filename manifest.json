@@ -5,7 +5,8 @@
   "description": "note.comの下書き記事を一括で公開するChrome拡張機能",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "storage"
   ],
   "host_permissions": [
     "https://note.com/*",
